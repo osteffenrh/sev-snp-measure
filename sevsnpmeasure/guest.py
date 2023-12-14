@@ -7,9 +7,9 @@ import hashlib
 from typing import Optional
 
 from .gctx import GCTX
-from .ovmf import OVMF, SectionType, OvmfSevMetadataSectionDesc
+from .ovmf import OVMF, SectionType, OvmfSevMetadataSectionDesc, SVSM
 from .sev_hashes import SevHashes
-from .vmsa import VMSA
+from .vmsa import VMSA, VMSA_SVSM
 from .sev_mode import SevMode
 from .vmm_types import VMMType
 
@@ -18,7 +18,9 @@ PAGE_MASK = 0xfff
 
 def calc_launch_digest(mode: SevMode, vcpus: int, vcpu_sig: int, ovmf_file: str,
                        kernel: str, initrd: str, append: str, snp_ovmf_hash_str: str,
-                       vmm_type: VMMType, dump_vmsa: bool) -> bytes:
+                       vmm_type: VMMType, dump_vmsa: bool,
+                       svsm_file: str, ovmf_vars_size: int
+                       ) -> bytes:
     if snp_ovmf_hash_str and mode != SevMode.SEV_SNP:
         raise ValueError("SNP OVMF hash only works with SNP")
 
@@ -29,6 +31,10 @@ def calc_launch_digest(mode: SevMode, vcpus: int, vcpu_sig: int, ovmf_file: str,
         return seves_calc_launch_digest(vcpus, vcpu_sig, ovmf_file, kernel, initrd, append, vmm_type=vmm_type)
     elif mode == SevMode.SEV:
         return sev_calc_launch_digest(ovmf_file, kernel, initrd, append)
+    elif mode == SevMode.SEV_SNP_SVSM:
+        if vmm_type != VMMType.QEMU:
+            raise AssertionError("SVSM mode is only implemented for Qemu.")
+        return svsm_calc_launch_digest(vcpus, vcpu_sig, ovmf_file, ovmf_vars_size, svsm_file, dump_vmsa)
     else:
         raise ValueError("unknown mode")
 
@@ -102,6 +108,37 @@ def snp_calc_launch_digest(vcpus: int, vcpu_sig: int, ovmf_file: str,
     snp_update_metadata_pages(gctx, ovmf, sev_hashes, vmm_type)
 
     vmsa = VMSA(SevMode.SEV_SNP, ovmf.sev_es_reset_eip(), vcpu_sig, vmm_type)
+    for i, vmsa_page in zip(range(vcpus), vmsa.pages(vcpus)):
+        gctx.update_vmsa_page(vmsa_page)
+        if dump_vmsa is True:
+            with open(f"vmsa{i}.bin", "wb") as f:
+                f.write(vmsa_page)
+
+    return gctx.ld()
+
+
+def svsm_calc_launch_digest(vcpus: int, vcpu_sig: int, ovmf_file: str, ovmf_vars_size: int, svsm_file: str,
+                            dump_vmsa: bool) -> bytes:
+
+    gctx = GCTX()
+    ovmf = OVMF(ovmf_file)
+    svsm = SVSM(svsm_file, end_at = ovmf.gpa() - ovmf_vars_size)
+
+    print( "Flash mappings:")
+    print(f"OVMF:   start {ovmf.gpa():016x} end: {ovmf.end_gpa():016x} size: {ovmf.size():08x}")
+    print(f"(VARS): start {svsm.end_gpa():016x} end: {ovmf.gpa():016x} size: {ovmf_vars_size:08x}")
+    print(f"SVSM:   start {svsm.gpa():016x} end: {svsm.end_gpa():016x} size: {svsm.size():08x}")
+    print("")
+
+    eip = svsm.sev_es_reset_eip()
+    print(f"SVSM eip = {eip:016x}")
+
+    gctx.update_normal_pages(ovmf.gpa(), ovmf.data())
+    gctx.update_normal_pages(svsm.gpa(), svsm.data())
+
+    snp_update_metadata_pages(gctx, svsm, None, VMMType.QEMU)
+
+    vmsa = VMSA_SVSM(eip, vcpu_sig)
     for i, vmsa_page in zip(range(vcpus), vmsa.pages(vcpus)):
         gctx.update_vmsa_page(vmsa_page)
         if dump_vmsa is True:
