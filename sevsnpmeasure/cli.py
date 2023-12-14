@@ -70,6 +70,7 @@ def main() -> int:
                         help='Kernel command line to calculate hash from (use with --kernel)')
     parser.add_argument('--output-format', choices=['hex', 'base64'], help='Measurement output format', default='hex')
     parser.add_argument('--snp-ovmf-hash', metavar='HASH', help='Precalculated hash of the OVMF binary (hex string)')
+    parser.add_argument('--dump-vmsa', action='store_true', help='Write measured VMSAs to vmsa<N>.bin (SNP mode only)')
     args = parser.parse_args()
 
     if args.mode == 'snp:ovmf-hash':
@@ -94,9 +95,13 @@ def main() -> int:
 
     try:
         sev_mode = SevMode.from_str(args.mode)
+
+        if args.dump_vmsa is True and sev_mode is not SevMode.SEV_SNP:
+            parser.error("--dump-vmsa in only available in SNP mode")
+
         ld = guest.calc_launch_digest(sev_mode, args.vcpus, vcpu_sig, args.ovmf,
-                                      args.kernel, args.initrd, args.append, args.snp_ovmf_hash,
-                                      vmm_type=vmm_type)
+                                  args.kernel, args.initrd, args.append, args.snp_ovmf_hash,
+                                  vmm_type, args.dump_vmsa)
 
         print_measurement(ld, sev_mode, args.output_format, args.verbose)
     except RuntimeError as e:
