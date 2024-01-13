@@ -121,6 +121,7 @@ def svsm_calc_launch_digest(vcpus: int, vcpu_sig: int, ovmf_file: str, ovmf_vars
                             dump_vmsa: bool) -> bytes:
 
     gctx = GCTX()
+    gctx.verbose = True
     ovmf = OVMF(ovmf_file)
     svsm = SVSM(svsm_file, end_at = ovmf.gpa() - ovmf_vars_size)
 

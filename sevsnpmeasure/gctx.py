@@ -41,6 +41,7 @@ class GCTX(object):
 
     def __init__(self, seed: bytes = ZEROS):
         self._ld = seed
+        self.verbose = False
 
     def ld(self) -> bytes:
         return self._ld
@@ -64,6 +65,8 @@ class GCTX(object):
 
     def update_normal_pages(self, start_gpa, data):
         assert len(data) % 4096 == 0
+        if self.verbose:
+            print(f"Update normal pages, gpa=0x{start_gpa:016x}, len=0x{len(data):08x}")
         offset = 0
         while offset < len(data):
             page_data = data[offset:offset+4096]
@@ -72,10 +75,14 @@ class GCTX(object):
 
     def update_vmsa_page(self, data):
         assert len(data) == 4096
+        if self.verbose:
+            print(f"Update vmsa, gpa=0x{self.VMSA_GPA:016x}, len=0x{len(data):08x}")
         self._update(0x02, self.VMSA_GPA, sha384(data))
 
     def update_zero_pages(self, gpa, length_bytes):
         assert length_bytes % 4096 == 0
+        if self.verbose:
+            print(f"Update zero pages, gpa=0x{gpa:016x}, len=0x{length_bytes:08x}")
         offset = 0
         while offset < length_bytes:
             self._update(0x03, gpa + offset, ZEROS)
@@ -85,7 +92,11 @@ class GCTX(object):
         self._update(0x04, gpa, ZEROS)
 
     def update_secrets_page(self, gpa):
+        if self.verbose:
+            print (f"Update secrets pages, gpa=0x{gpa:016x}, len=0x1000")
         self._update(0x05, gpa, ZEROS)
 
     def update_cpuid_page(self, gpa):
+        if self.verbose:
+            print (f"Update CPUID pages, gpa=0x{gpa:016x}, len=0x1000")
         self._update(0x06, gpa, ZEROS)
