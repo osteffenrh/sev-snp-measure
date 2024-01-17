@@ -15,3 +15,6 @@ binaries.
 The end of the file contains a GUIDed footer table with entries that hold the
 SEV-ES AP reset vector address and SNP metadata table, which are needed in
 order to compute VMSAs for SEV-ES guests and the list of SNP measured pages.
+
+`svsm.bin` contains a full Coconut SVSM binary image and `svsm_ovmf.fd` is a
+matching OVMF build. The full files are required for SNP+SVSM mode.
