@@ -234,19 +234,11 @@ class VMSA_SVSM(object):
 
     def __init__(self, ap_eip: int, vcpu_sig: int, vmm_type: VMMType = VMMType.QEMU):
         sev_features = 0x1
-
-        # only one type of vmsa for svsm?
-        self.bsp_save_area = VMSA_SVSM.build_save_area(ap_eip, sev_features, vcpu_sig, vmm_type)
-        if ap_eip:
-            self.ap_save_area = VMSA_SVSM.build_save_area(ap_eip, sev_features, vcpu_sig, vmm_type)
+        self.save_area = VMSA_SVSM.build_save_area(ap_eip, sev_features, vcpu_sig, vmm_type)
 
     def pages(self, vcpus: int) -> Iterator[bytes]:
         """
         Generate VMSA pages
         """
-        # only one type of vmsa for svsm?
         for i in range(vcpus):
-            if i == 0:
-                yield bytes(self.bsp_save_area)
-            else:
-                yield bytes(self.ap_save_area)
+            yield bytes(self.save_area)
